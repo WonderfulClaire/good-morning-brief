@@ -4,13 +4,13 @@
 
 | 板块 | 内容 | 数据源 |
 |------|------|--------|
-| 📄 论文精选 | 按你的研究方向 + 前沿方向精选 top 3 | arXiv RSS（主）/ OpenAlex / Semantic Scholar（兜底） |
-| 📰 科技新闻 | 当日高热度科技/AI 新闻 | Hacker News 官方 API |
+| 📄 论文精选 | 按你的研究方向 + 前沿方向精选 top 3，每篇附「中文方向标签 + 一句话大白话看点」 | arXiv RSS（主）/ OpenAlex / Semantic Scholar（兜底） |
+| 📰 科技新闻 | 当日中文科技新闻，每条附一句话中文摘要 + 分类标签（全中文，无英文源） | IT之家 RSS（主）/ V2EX 热帖（兜底） |
 | 💰 基金涨跌 | 你的持仓当日涨跌 + 定投提示 | 天天基金（东方财富） |
 
 邮件顶部还有一条 **「今日速览」**：一句话汇总「N 篇论文 · N 条新闻 · 各基金涨跌（涨红跌绿）」，一眼看完今天的重点，不用点开也能快速扫读。
 
-> 这是 `good-morning-paper`（现已设为私有归档）的进化版：从「只发论文」升级为「论文 + 新闻 + 基金」三合一 HTML 邮件。原仓库不再维护，本仓库为唯一活跃版本。
+> 这是 `good-morning-paper` 的进化版：从「只发论文」升级为「论文 + 新闻 + 基金」三合一 HTML 邮件。原 `good-morning-paper` 仓库保持不动。
 
 ---
 
@@ -52,9 +52,9 @@
 
 所有设置都在 [`config.yaml`](./config.yaml)：
 
-- **论文方向**：改 `papers.focus_topics`（核心方向）和 `frontier_topics`（前沿方向）；类目在 `paper_categories`
+- **论文方向**：改 `papers.focus_topics`（核心方向）和 `frontier_topics`（前沿方向）
 - **论文篇数**：`papers.pick_top_n`
-- **新闻条数/热度门槛**：`news.top_n` / `news.min_score`
+- **新闻条数**：`news.top_n`（默认 6；IT之家 RSS 主源，V2EX 兜底）
 - **基金持仓**：`funds.holdings`（加减基金代码即可）
 - **定投提示阈值**：`funds.dip_alert_pct`（单日跌幅超过该值时标注「可关注定投」）
 
@@ -87,8 +87,8 @@ good-morning-brief/
 ├── config.yaml             # 所有可调设置
 ├── requirements.txt
 ├── src/
-│   ├── papers.py           # arXiv RSS + OpenAlex + Semantic Scholar
-│   ├── news.py             # Hacker News
+│   ├── papers.py           # arXiv + Semantic Scholar
+│   ├── news.py             # IT之家 RSS + V2EX（中文科技新闻）
 │   ├── funds.py            # 天天基金净值/涨跌
 │   ├── render.py           # HTML 邮件渲染（涨红跌绿）
 │   ├── mailer.py           # SMTP 发信（163/QQ SSL）

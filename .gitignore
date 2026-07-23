@@ -1,0 +1,10 @@
+# 依赖与缓存
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# 输出
+briefs/*.html
+!briefs/.gitkeep

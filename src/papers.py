@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -32,6 +33,120 @@ _NS = {
     "content": "http://purl.org/rss/1.0/modules/content/",
 }
 
+# --------------------------- 中文“一句话看点”字典 ---------------------------
+# (英文关键词, 中文标签, 大白话解释)。扫描标题+摘要命中即生成中文标签与看点。
+_TOPIC_ZH = [
+    ("speech enhancement", "语音增强", "让录音里的人声更清楚、把背景噪声压下去"),
+    ("beamforming", "波束形成", "用一排麦克风像“聚光灯”一样只收某个方向的声音、抑制别处噪声"),
+    ("multi-channel", "多通道", "用麦克风阵列从多个位置一起收音再融合"),
+    ("microphone-array", "麦克风阵列", "用多个麦克风排成阵列来定向收音"),
+    ("target speaker", "目标说话人分离", "从一堆人同时说话里单独抽出某一个的声音"),
+    ("speaker extraction", "目标说话人分离", "从一堆人同时说话里单独抽出某一个的声音"),
+    ("source separation", "声音分离", "把混在一起的多个人声/乐器声拆开"),
+    ("speech separation", "声音分离", "把混在一起的多个人声拆开"),
+    ("noise reduction", "降噪", "压制环境噪声、保留干净人声"),
+    ("noise suppression", "降噪", "压制环境噪声、保留干净人声"),
+    ("wake word", "唤醒词", "用特定词（如“小爱同学”）唤醒设备"),
+    ("wake-word", "唤醒词", "用特定词（如“小爱同学”）唤醒设备"),
+    ("speech recognition", "语音识别", "把人说的话转成文字"),
+    ("asr", "语音识别", "把人说的话转成文字"),
+    ("text-to-speech", "语音合成", "把文字念成自然的人声"),
+    ("tts", "语音合成", "把文字念成自然的人声"),
+    ("large language model", "大语言模型", "类似 ChatGPT 那样能对话、写代码的大模型"),
+    ("llm", "大语言模型", "类似 ChatGPT 那样能对话、写代码的大模型"),
+    ("retrieval-augmented", "检索增强生成", "先去查资料、再让模型回答，减少胡说八道"),
+    ("rag", "检索增强生成", "先去查资料、再让模型回答，减少胡说八道"),
+    ("agent", "智能体", "能自己规划步骤、调用工具去完成任务的 AI"),
+    ("multi-agent", "多智能体", "好几个 AI 分工协作完成复杂任务"),
+    ("multimodal", "多模态", "同时理解文字、声音、图像等多种信息"),
+    ("vision", "视觉", "让 AI 看懂图片/视频"),
+    ("on-device", "端侧部署", "直接在手机等设备本地运行，不用把数据传上云"),
+    ("edge", "边缘计算", "在靠近数据源的设备上计算，更快更省电"),
+    ("distill", "模型蒸馏", "把大模型的能力压缩到小模型上跑"),
+    ("quantiz", "模型量化", "把模型“瘦身”到更小体积、更快推理"),
+    ("foundation model", "基础模型", "在海量数据上先预训练、可再定制的通用大模型"),
+    ("pose", "姿态估计", "识别人体关键点、判断动作姿势"),
+    ("keypoint", "关键点检测", "在图像里标出关键位置（如关节、人脸点）"),
+    ("reinforcement", "强化学习", "靠“试错+奖励”让 AI 自己学会策略"),
+    ("diffusion", "扩散模型", "一类主流的生成模型，常用于生图/生视频"),
+    ("self-supervised", "自监督学习", "不靠人工标注、从数据本身学特征"),
+    ("embedding", "向量嵌入", "把文字/图变成一串数字，方便比对相似度"),
+    ("recommend", "推荐系统", "猜你喜欢、给你推内容"),
+    ("graph neural", "图神经网络", "在“关系网”上做学习的模型"),
+    ("time series", "时间序列", "对随时间变化的数据做预测/分析"),
+    ("anomaly", "异常检测", "从数据里找出不对劲的地方"),
+    ("signal", "信号处理", "对声音/传感器信号做降噪、提取特征"),
+    ("embodied", "具身智能", "让 AI 拥有身体、能在真实世界里行动"),
+]
+
+
+def _venue_zh(venue: str) -> str:
+    if not venue:
+        return ""
+    s = venue.lower()
+    if "arxiv" in s:
+        return "arXiv 预印本"
+    if "icassp" in s:
+        return "声学与信号处理顶会 ICASSP"
+    if "interspeech" in s:
+        return "语音领域会议 Interspeech"
+    if "acl" in s and "acl" in s:
+        return "自然语言处理顶会 ACL"
+    if "cvpr" in s:
+        return "计算机视觉顶会 CVPR"
+    if any(k in s for k in ("icml", "neurips", "iclr")):
+        return f"机器学习顶会 {venue}"
+    if "taslp" in s:
+        return "音频领域期刊 IEEE TASLP"
+    return venue
+
+
+def _kw_match(kw: str, text: str) -> bool:
+    """多词关键词用子串；单词用词边界前缀匹配，避免 pose↔propose、edge↔knowledge 之类误命中。"""
+    if " " in kw:
+        return kw in text
+    return re.search(r"\b" + re.escape(kw), text) is not None
+
+
+def _annotate(paper: Paper, focus: list[str]) -> Paper:
+    """根据标题+摘要命中方向字典，生成中文标签与一句话看点。"""
+    text = f"{paper.title} {paper.abstract}".lower()
+    focus_low = [t.lower() for t in focus]
+
+    seen_tags: dict[str, str] = {}  # 标签 -> 大白话
+    explainers: list[str] = []
+    for kw, tag, plain in _TOPIC_ZH:
+        if _kw_match(kw, text) and tag not in seen_tags:
+            seen_tags[tag] = plain
+            explainers.append(plain)
+
+    tags = list(seen_tags.keys())
+    paper.tags = tags
+
+    # 是否命中你的核心方向
+    focus_hit = any(f in text for f in focus_low) or any(
+        t for t in tags if t in ("语音增强", "波束形成", "多通道", "麦克风阵列",
+                                 "目标说话人分离", "声音分离", "降噪", "语音识别", "语音合成", "唤醒词")
+    )
+
+    lead = "你的方向" if focus_hit else ""
+    if tags:
+        lead = (lead + " · " if lead else "") + "、".join(tags[:4])
+
+    if explainers:
+        plain = explainers[0]
+        if len(explainers) > 1 and len(explainers[0]) + len(explainers[1]) < 40:
+            plain = explainers[0] + "，" + explainers[1]
+        hl = f"{lead}。简单说，{plain}。" if lead else f"简单说，{plain}。"
+    else:
+        hl = (lead + "。") if lead else "方向偏综合，建议点开标题看原文。"
+
+    vz = _venue_zh(paper.venue)
+    if vz:
+        hl += f" 来源：{vz}。"
+    paper.highlight = hl
+    return paper
+
 
 @dataclass
 class Paper:
@@ -45,6 +160,8 @@ class Paper:
     url: str = ""
     score: float = 0.0
     reasons: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)      # 中文方向标签
+    highlight: str = ""                                 # 中文一句话看点
 
 
 def _retry(func, *args, tries: int = 2, sleep: float = 2.0, **kwargs):
@@ -303,4 +420,7 @@ def fetch_papers(cfg: dict) -> list[Paper]:
             unique.append(p)
 
     ranked = sorted((_score(p, cfg) for p in unique), key=lambda x: x.score, reverse=True)
-    return ranked[:top_n]
+    top = ranked[:top_n]
+    for p in top:
+        _annotate(p, focus)
+    return top

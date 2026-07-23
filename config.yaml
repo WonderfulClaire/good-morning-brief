@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# good-morning-brief 个人每日简报配置
+# 三个板块：论文 / 科技新闻 / 基金涨跌，每天一封邮件送到你的信箱。
+# ---------------------------------------------------------------------------
+
+brief:
+  title: "Claire 的每日简报"
+  language: zh-CN
+  timezone: "Asia/Shanghai"
+
+# ------------------------- 板块 1：论文 -------------------------
+papers:
+  enabled: true
+  # 每天精选几篇
+  pick_top_n: 3
+  # 检索时间窗（天）与每源抓取上限
+  days_back: 14
+  max_results_per_source: 40
+  # 你关注的核心方向（命中即高分）
+  focus_topics:
+    - multi-channel speech enhancement
+    - microphone-array speech enhancement
+    - neural beamforming
+    - MVDR beamforming
+    - speech separation
+    - target speaker extraction
+  # 你也想跟的前沿方向（加分项，跟进就业/趋势）
+  frontier_topics:
+    - large language model agent
+    - retrieval augmented generation
+    - efficient LLM inference
+    - multimodal foundation model
+    - reinforcement learning
+    - embodied AI
+  # 高优先级会议/期刊（命中加分）
+  venues_high_priority:
+    - ICASSP
+    - Interspeech
+    - IEEE TASLP
+    - NeurIPS
+    - ICML
+    - ICLR
+    - ACL
+  ranking_weights:
+    keyword_match: 0.40
+    frontier_bonus: 0.20
+    venue_priority: 0.15
+    recency: 0.25
+
+# ------------------------- 板块 2：科技新闻 -------------------------
+news:
+  enabled: true
+  # 每天展示几条
+  top_n: 6
+  # Hacker News 至少多少赞才纳入
+  min_score: 80
+  # 命中这些关键词的科技/AI 新闻优先靠前（不命中也可能入选热门）
+  prefer_keywords:
+    - AI
+    - LLM
+    - GPT
+    - model
+    - agent
+    - machine learning
+    - open source
+    - chip
+    - GPU
+    - robot
+    - research
+
+# ------------------------- 板块 3：基金 -------------------------
+funds:
+  enabled: true
+  # 你的持仓（天天基金代码）
+  holdings:
+    - code: "019172"
+      alias: "摩根纳斯达克100人民币A"
+    - code: "022436"
+      alias: "摩根中证A500ETF联接A"
+  # 简单加仓提示：单日跌幅超过该百分比时提示“可关注定投/加仓”
+  dip_alert_pct: 1.0

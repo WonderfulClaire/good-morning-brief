@@ -63,23 +63,8 @@ papers:
 # ------------------------- 板块 2：科技新闻 -------------------------
 news:
   enabled: true
-  # 每天展示几条
+  # 每天展示几条（中文科技新闻，主源 IT之家 RSS，兜底 V2EX 热帖）
   top_n: 6
-  # Hacker News 至少多少赞才纳入
-  min_score: 80
-  # 命中这些关键词的科技/AI 新闻优先靠前（不命中也可能入选热门）
-  prefer_keywords:
-    - AI
-    - LLM
-    - GPT
-    - model
-    - agent
-    - machine learning
-    - open source
-    - chip
-    - GPU
-    - robot
-    - research
 
 # ------------------------- 板块 3：基金 -------------------------
 funds:

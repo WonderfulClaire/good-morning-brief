@@ -1,7 +1,11 @@
-"""把三个板块渲染成一封 HTML 邮件（含纯文本兜底）。
+"""把三个板块渲染成一封全中文 HTML 邮件（含纯文本兜底）。
 
-配色遵循 A 股习惯：涨=红，跌=绿。
-样式全部内联，兼容主流邮箱客户端。
+设计原则（参考阮一峰周刊 / HF Daily Papers 中文解读）：
+  - 全中文，论文标题保留英文（用户要求）。
+  - 一眼看懂：每篇论文用「中文标签 + 一句话大白话看点」代替英文摘要；
+    每条新闻用「中文标题 + 一句话中文摘要 + 分类标签」。
+  - 不堆术语、不堆摘要。
+配色遵循 A 股习惯：涨=红，跌=绿。样式全部内联，兼容主流邮箱客户端。
 """
 from __future__ import annotations
 
@@ -17,6 +21,16 @@ LINE = "#e6e8eb"
 BG = "#f6f7f9"
 CARD = "#ffffff"
 ACCENT = "#3b5bdb"
+CHIP = "#eef2ff"
+CHIP_TX = "#3b5bdb"
+
+
+_WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+
+
+def _cn_date() -> str:
+    d = datetime.now()
+    return f"{d.year}年{d.month}月{d.day}日 {_WEEKDAYS[d.weekday()]}"
 
 
 def _fmt_pct(v):
@@ -41,7 +55,7 @@ def _section_title(text: str, emoji: str) -> str:
 # --------------------------- 基金 ---------------------------
 def _funds_html(funds) -> str:
     if not funds:
-        return ('<tr><td style="padding:8px 28px 4px;color:%s;font-size:13px;">暂无基金数据</td></tr>' % SUB)
+        return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">暂无基金数据</td></tr>'
     rows = []
     for f in funds:
         if not f.ok:
@@ -77,18 +91,18 @@ def _funds_html(funds) -> str:
 # --------------------------- 新闻 ---------------------------
 def _news_html(news) -> str:
     if not news:
-        return ('<tr><td style="padding:8px 28px 4px;color:%s;font-size:13px;">今日暂无满足条件的科技新闻</td></tr>' % SUB)
+        return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">今日暂无科技新闻</td></tr>'
     rows = []
     for i, n in enumerate(news, 1):
-        tag = ('<span style="display:inline-block;margin-left:6px;padding:0 6px;border-radius:8px;'
-               f'background:#eef2ff;color:{ACCENT};font-size:10px;font-weight:600;">关注</span>') if n.matched else ""
+        chip = (f'<span style="display:inline-block;margin-left:6px;padding:0 7px;border-radius:8px;'
+                f'background:{CHIP};color:{CHIP_TX};font-size:10px;font-weight:600;">{n.category}</span>')
+        summary = f'<div style="font-size:12.5px;color:{SUB};line-height:1.6;margin-top:5px;">{n.summary}</div>' if n.summary else ""
         rows.append(
-            f'<tr><td style="padding:10px 28px;border-bottom:1px solid {LINE};">'
+            f'<tr><td style="padding:11px 28px;border-bottom:1px solid {LINE};">'
             f'<div style="font-size:14px;line-height:1.5;">'
             f'<span style="color:{SUB};font-weight:700;">{i:02d}.</span> '
-            f'<a href="{n.url}" style="color:{INK};text-decoration:none;font-weight:600;">{n.title}</a>{tag}</div>'
-            f'<div style="font-size:12px;color:{SUB};margin-top:3px;">🔥 {n.score} 赞　·　'
-            f'<a href="{n.hn_url}" style="color:{ACCENT};text-decoration:none;">HN 讨论</a></div>'
+            f'<a href="{n.url}" style="color:{INK};text-decoration:none;font-weight:600;">{n.title}</a>{chip}</div>'
+            f'{summary}'
             f'</td></tr>'
         )
     return "".join(rows)
@@ -97,28 +111,37 @@ def _news_html(news) -> str:
 # --------------------------- 论文 ---------------------------
 def _papers_html(papers) -> str:
     if not papers:
-        return ('<tr><td style="padding:8px 28px 4px;color:%s;font-size:13px;">今日未检索到匹配论文（源站可能暂时不可达）</td></tr>' % SUB)
+        return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">今日未检索到匹配论文（源站可能暂时不可达）</td></tr>'
     rows = []
     for i, p in enumerate(papers, 1):
-        authors = ", ".join(p.authors[:4]) + (" 等" if len(p.authors) > 4 else "")
-        meta = " · ".join([x for x in [p.venue, str(p.year) if p.year else "", p.source] if x])
-        reasons = ""
-        if p.reasons:
-            chips = "".join(
-                f'<span style="display:inline-block;margin:2px 4px 0 0;padding:1px 7px;border-radius:10px;'
-                f'background:#f0f3ff;color:{ACCENT};font-size:11px;">{r}</span>' for r in p.reasons[:3]
-            )
-            reasons = f'<div style="margin-top:6px;">{chips}</div>'
-        abs = (p.abstract[:220] + "…") if len(p.abstract) > 220 else p.abstract
+        # 中文方向标签
+        tags = ""
+        if p.tags:
+            tags = "<div style='margin-top:7px;'>" + "".join(
+                f'<span style="display:inline-block;margin:0 5px 0 0;padding:1px 8px;border-radius:10px;'
+                f'background:{CHIP};color:{CHIP_TX};font-size:11px;font-weight:600;">{t}</span>'
+                for t in p.tags[:5]
+            ) + "</div>"
+        # 一句话中文看点
+        highlight = (f'<div style="font-size:13px;color:{INK};line-height:1.65;margin-top:7px;">{p.highlight}</div>'
+                     ) if p.highlight else ""
+        # 元信息：来源 + 作者数 + 日期
+        meta_bits = []
+        if p.venue:
+            meta_bits.append(p.venue)
+        if p.authors:
+            meta_bits.append(f"{len(p.authors)} 位作者")
+        if p.published:
+            meta_bits.append(p.published.strftime("%Y-%m-%d"))
+        meta = " · ".join(meta_bits)
         rows.append(
-            f'<tr><td style="padding:14px 28px;border-bottom:1px solid {LINE};">'
-            f'<div style="font-size:14px;line-height:1.5;">'
+            f'<tr><td style="padding:15px 28px;border-bottom:1px solid {LINE};">'
+            f'<div style="font-size:14.5px;line-height:1.5;">'
             f'<span style="color:{SUB};font-weight:700;">{i:02d}.</span> '
             f'<a href="{p.url}" style="color:{INK};text-decoration:none;font-weight:700;">{p.title}</a></div>'
-            f'<div style="font-size:12px;color:{SUB};margin-top:4px;">{authors}</div>'
-            f'<div style="font-size:12px;color:{FLAT};margin-top:2px;">{meta}</div>'
-            f'{reasons}'
-            f'<div style="font-size:12.5px;color:{SUB};line-height:1.6;margin-top:6px;">{abs}</div>'
+            f'{tags}'
+            f'{highlight}'
+            f'<div style="font-size:11.5px;color:{FLAT};margin-top:6px;">{meta}</div>'
             f'</td></tr>'
         )
     return "".join(rows)
@@ -150,7 +173,7 @@ def _summary_html(papers, news, funds) -> str:
 
 # --------------------------- 组装 ---------------------------
 def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai") -> str:
-    now = datetime.now().strftime("%Y-%m-%d %A")
+    date_str = _cn_date()
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -162,7 +185,7 @@ def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai"
   <!-- header -->
   <tr><td style="background:linear-gradient(135deg,#3b5bdb,#5c7cfa);padding:28px 28px 24px;">
     <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.5px;">☀️ {title}</div>
-    <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{now} · 论文 / 科技新闻 / 基金一览</div>
+    <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{date_str} · 论文 / 科技新闻 / 基金 一览</div>
   </td></tr>
 
   {_summary_html(papers, news, funds)}
@@ -179,7 +202,7 @@ def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai"
   <!-- footer -->
   <tr><td style="padding:22px 28px;background:{BG};">
     <div style="font-size:11.5px;color:{FLAT};line-height:1.7;">
-      本邮件由 good-morning-brief 自动生成 · 数据源：arXiv / Semantic Scholar / Hacker News / 天天基金<br>
+      本邮件由 good-morning-brief 自动生成 · 论文来源 arXiv · 新闻来源 IT之家 · 基金来源 天天基金<br>
       基金涨跌颜色遵循 A 股习惯（涨红跌绿）· 净值为 T-1 收盘口径 · 仅供参考，不构成投资建议
     </div>
   </td></tr>
@@ -196,18 +219,26 @@ def render_text(title: str, papers, news, funds) -> str:
         f"{(f.alias or f.code)} {('+%.2f%%' % f.change_pct) if (f.ok and f.change_pct is not None) else '—'}"
         for f in funds
     )
-    lines = [f"☀️ {title}", datetime.now().strftime("%Y-%m-%d"),
+    lines = [f"☀️ {title}", _cn_date(),
              f"📄 {pc} 篇 · 📰 {nc} 条 · 💰 {fund_txt}", ""]
     lines.append("== 论文精选 ==")
     if papers:
         for i, p in enumerate(papers, 1):
-            lines.append(f"{i}. {p.title}\n   {p.url}")
+            lines.append(f"{i}. {p.title}")
+            if p.tags:
+                lines.append(f"   方向：{'、'.join(p.tags[:5])}")
+            if p.highlight:
+                lines.append(f"   {p.highlight}")
+            lines.append(f"   链接：{p.url}")
     else:
         lines.append("(今日无匹配论文)")
     lines.append("\n== 科技新闻 ==")
     if news:
         for i, n in enumerate(news, 1):
-            lines.append(f"{i}. {n.title} ({n.score}赞)\n   {n.url}")
+            lines.append(f"{i}. [{n.category}] {n.title}")
+            if n.summary:
+                lines.append(f"   {n.summary}")
+            lines.append(f"   链接：{n.url}")
     else:
         lines.append("(今日无新闻)")
     lines.append("\n== 基金涨跌 ==")

@@ -53,6 +53,18 @@ def _section_title(text: str, emoji: str) -> str:
 
 
 # --------------------------- 基金 ---------------------------
+def _advice_chip(level: str) -> str:
+    """加仓建议的 action chip 染色（与涨跌幅红绿区分开）。"""
+    style = {
+        "buy":  ("#0c8599", "#e6fcf5"),   # 青绿：建议买/加仓
+        "hold": ("#3b5bdb", "#eef2ff"),   # 蓝：持有/定投
+        "warn": ("#c92a2a", "#fff0f0"),   # 红：观望/减仓
+    }.get(level, ("#57606a", "#f1f3f5"))
+    fg, bg = style
+    return (f'display:inline-block;padding:2px 9px;border-radius:11px;'
+            f'background:{bg};color:{fg};font-size:11.5px;font-weight:700;')
+
+
 def _funds_html(funds) -> str:
     if not funds:
         return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">暂无基金数据</td></tr>'
@@ -71,7 +83,7 @@ def _funds_html(funds) -> str:
         d5_txt, d5_color, _ = _fmt_pct(f.recent_5d_pct)
         alert = ('<span style="display:inline-block;margin-left:8px;padding:1px 7px;border-radius:10px;'
                  f'background:#fdecec;color:{UP};font-size:11px;font-weight:600;">跌幅偏大 · 可关注定投</span>') if f.dip_alert else ""
-        rows.append(
+        card = (
             f'<tr><td style="padding:12px 28px;border-bottom:1px solid {LINE};">'
             f'<table width="100%" cellpadding="0" cellspacing="0"><tr>'
             f'<td style="vertical-align:top;">'
@@ -83,6 +95,68 @@ def _funds_html(funds) -> str:
             f'<div style="font-size:12px;color:{SUB};margin-top:3px;">净值 {f.nav}　'
             f'近5日 <span style="color:{d5_color};">{d5_txt}</span></div>'
             f'</td></tr></table>'
+        )
+        # —— 加仓建议子块 ——
+        adv = getattr(f, "advice", None)
+        if adv and getattr(adv, "ok", False):
+            rows.append(card)
+            rows.append(
+                f'<tr><td style="padding:0 28px 14px;">'
+                f'<div style="background:{BG};border-radius:10px;padding:11px 14px;'
+                f'border-left:3px solid {ACCENT};">'
+                f'<div style="margin-bottom:6px;">'
+                f'<span style="{_advice_chip(adv.level)}">{adv.verdict_label}</span>'
+                f'<span style="font-size:11.5px;color:{SUB};margin-left:8px;">'
+                f'近1周 {("+" if adv.ret_1w and adv.ret_1w>0 else "")}{adv.ret_1w:.2f}% · '
+                f'近1月 {("+" if adv.ret_1m and adv.ret_1m>0 else "")}{adv.ret_1m:.2f}% · '
+                f'近1年 {("+" if adv.ret_1y and adv.ret_1y>0 else "")}{adv.ret_1y:.2f}%</span>'
+                f'</div>'
+                f'<div style="font-size:12.5px;color:{INK};line-height:1.65;">{adv.text}</div>'
+                f'</div>'
+                f'</td></tr>'
+            )
+            continue
+        rows.append(card)
+    return "".join(rows)
+
+
+def _opportunities_html(opportunities) -> str:
+    """新机会：与现有持仓互补、可关注配置的基金。"""
+    opps = opportunities or []
+    if not opps:
+        return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">暂无新机会配置</td></tr>'
+    rows = []
+    for o in opps:
+        if not o.ok:
+            rows.append(
+                f'<tr><td style="padding:10px 28px;">'
+                f'<div style="font-size:14px;color:{INK};font-weight:600;">{o.alias or o.code} '
+                f'<span style="color:{SUB};font-weight:400;">({o.code})</span></div>'
+                f'<div style="font-size:12px;color:{FLAT};margin-top:2px;">获取失败：{o.error}</div>'
+                f'</td></tr>'
+            )
+            continue
+        pct_txt, pct_color, _ = _fmt_pct(o.change_pct)
+        adv = getattr(o, "advice", None)
+        verdict_chip = r1m = r1y = adv_text = ""
+        if adv and getattr(adv, "ok", False):
+            verdict_chip = f'<span style="{_advice_chip(adv.level)}">{adv.verdict_label}</span>'
+            r1m = f"{adv.ret_1m:+.2f}%" if adv.ret_1m is not None else "—"
+            r1y = f"{adv.ret_1y:+.2f}%" if adv.ret_1y is not None else "—"
+            adv_text = adv.text
+        rows.append(
+            f'<tr><td style="padding:12px 28px;border-bottom:1px solid {LINE};">'
+            f'<table width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td style="vertical-align:top;">'
+            f'<div style="font-size:14px;color:{INK};font-weight:600;">{o.alias or o.name} '
+            f'<span style="color:{SUB};font-weight:400;font-size:12px;">({o.code})</span></div>'
+            f'<div style="font-size:12px;color:{SUB};margin-top:3px;">净值 {o.nav} · '
+            f'当日 <span style="color:{pct_color};font-weight:600;">{pct_txt}</span> · '
+            f'近1月 {r1m} · 近1年 {r1y}</div>'
+            f'</td>'
+            f'<td style="vertical-align:top;text-align:right;white-space:nowrap;padding-top:2px;">'
+            f'{verdict_chip}</td></tr></table>'
+            f'<div style="font-size:12.5px;color:{INK};line-height:1.65;margin-top:7px;">{adv_text}</div>'
             f'</td></tr>'
         )
     return "".join(rows)
@@ -159,8 +233,13 @@ def _summary_html(papers, news, funds) -> str:
         if f.ok and f.change_pct is not None:
             txt, color, _ = _fmt_pct(f.change_pct)
             name = f.alias or f.name or f.code
+            verdict = ""
+            adv = getattr(f, "advice", None)
+            if adv and getattr(adv, "ok", False):
+                verdict = f' <b style="color:{ACCENT};">{adv.verdict}</b>'
             parts.append(
-                f'<span style="margin-right:18px;">💰 {name} <b style="color:{color};">{txt}</b></span>'
+                f'<span style="margin-right:18px;">💰 {name} '
+                f'<b style="color:{color};">{txt}</b>{verdict}</span>'
             )
         else:
             parts.append(f'<span style="margin-right:18px;">💰 {f.alias or f.code} 数据缺失</span>')
@@ -172,7 +251,7 @@ def _summary_html(papers, news, funds) -> str:
 
 
 # --------------------------- 组装 ---------------------------
-def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai") -> str:
+def render_html(title: str, papers, news, funds, opportunities=None, tz_label: str = "Asia/Shanghai") -> str:
     date_str = _cn_date()
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -199,6 +278,9 @@ def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai"
   {_section_title("基金涨跌", "💰")}
   {_funds_html(funds)}
 
+  {_section_title("新机会 · 可关注配置", "✨")}
+  {_opportunities_html(opportunities)}
+
   <!-- footer -->
   <tr><td style="padding:22px 28px;background:{BG};">
     <div style="font-size:11.5px;color:{FLAT};line-height:1.7;">
@@ -212,7 +294,7 @@ def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai"
 </body></html>"""
 
 
-def render_text(title: str, papers, news, funds) -> str:
+def render_text(title: str, papers, news, funds, opportunities=None) -> str:
     pc = len(papers) if papers else 0
     nc = len(news) if news else 0
     fund_txt = " / ".join(
@@ -246,7 +328,27 @@ def render_text(title: str, papers, news, funds) -> str:
         if f.ok:
             pct = f"{f.change_pct:+.2f}%" if f.change_pct is not None else "—"
             lines.append(f"- {f.alias or f.name} ({f.code}) 净值{f.nav} 当日{pct} 净值日{f.nav_date}")
+            adv = getattr(f, "advice", None)
+            if adv and getattr(adv, "ok", False):
+                r1w = f"{adv.ret_1w:+.2f}%" if adv.ret_1w is not None else "—"
+                r1m = f"{adv.ret_1m:+.2f}%" if adv.ret_1m is not None else "—"
+                r1y = f"{adv.ret_1y:+.2f}%" if adv.ret_1y is not None else "—"
+                lines.append(f"   加仓建议【{adv.verdict}】近1周{r1w} 近1月{r1m} 近1年{r1y}")
+                lines.append(f"   {adv.text}")
         else:
             lines.append(f"- {f.alias or f.code} 获取失败: {f.error}")
+    lines.append("\n== 新机会 · 可关注配置 ==")
+    for o in (opportunities or []):
+        if o.ok:
+            pct = f"{o.change_pct:+.2f}%" if o.change_pct is not None else "—"
+            lines.append(f"- {o.alias or o.name} ({o.code}) 净值{o.nav} 当日{pct} 净值日{o.nav_date}")
+            adv = getattr(o, "advice", None)
+            if adv and getattr(adv, "ok", False):
+                r1m = f"{adv.ret_1m:+.2f}%" if adv.ret_1m is not None else "—"
+                r1y = f"{adv.ret_1y:+.2f}%" if adv.ret_1y is not None else "—"
+                lines.append(f"   建议【{adv.verdict}】近1月{r1m} 近1年{r1y}")
+                lines.append(f"   {adv.text}")
+        else:
+            lines.append(f"- {o.alias or o.code} 获取失败: {o.error}")
     lines.append("\n-- good-morning-brief 自动生成，仅供参考，不构成投资建议 --")
     return "\n".join(lines)

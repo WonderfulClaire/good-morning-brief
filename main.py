@@ -17,7 +17,8 @@ from dotenv import load_dotenv
 from src.config import load_config
 from src.papers import fetch_papers
 from src.news import fetch_news
-from src.funds import fetch_funds
+from src.funds import fetch_funds, fetch_opportunities
+from src.advice import build_advice, build_opportunity
 from src.render import render_html, render_text
 from src.mailer import send_email
 
@@ -51,9 +52,25 @@ def main() -> None:
     log.info("新闻 %d 条", len(news))
     funds = fetch_funds(cfg.get("funds", {})) if cfg.get("funds", {}).get("enabled", True) else []
     log.info("基金 %d 只", len(funds))
+    # 为每只基金计算加仓建议（数据驱动，best-effort）
+    for f in funds:
+        try:
+            f.advice = build_advice(f)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("加仓建议计算失败 %s: %s", f.code, exc)
+            f.advice = None
+    # 新机会：互补观察池（数据驱动，best-effort）
+    opportunities = fetch_opportunities(cfg.get("funds", {})) if cfg.get("funds", {}).get("enabled", True) else []
+    log.info("新机会 %d 只", len(opportunities))
+    for o in opportunities:
+        try:
+            o.advice = build_opportunity(o, getattr(o, "reason", ""))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("新机会建议计算失败 %s: %s", o.code, exc)
+            o.advice = None
 
-    html = render_html(title, papers, news, funds, brief.get("timezone", "Asia/Shanghai"))
-    text = render_text(title, papers, news, funds)
+    html = render_html(title, papers, news, funds, opportunities, brief.get("timezone", "Asia/Shanghai"))
+    text = render_text(title, papers, news, funds, opportunities)
 
     out_dir = Path("briefs")
     out_dir.mkdir(exist_ok=True)

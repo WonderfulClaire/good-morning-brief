@@ -37,14 +37,23 @@ class FundQuote:
     error: str = ""
     dip_alert: bool = False
     trend: list[float] = field(default_factory=list)  # 近若干日净值，用于迷你走势
+    # —— 加仓建议所需字段 ——
+    navs: list[float] = field(default_factory=list)   # 完整历史单位净值（旧→新）
+    dates: list[str] = field(default_factory=list)    # 对应日期（旧→新）
+    benchmark: str = ""                 # 跟踪指数名称（用于分析文案）
+    fx: bool = False                    # 是否 QDII（需考虑汇率）
+    reason: str = ""                    # 互补理由（仅机会基金用）
+    advice: object = None               # 由 advice.build_advice / build_opportunity 计算后回填
 
 
 def _ts_to_date(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
-def fetch_fund(code: str, alias: str = "", dip_alert_pct: float = 1.0) -> FundQuote:
-    q = FundQuote(code=code, name=alias or code, alias=alias)
+def fetch_fund(code: str, alias: str = "", dip_alert_pct: float = 1.0,
+               benchmark: str = "", fx: bool = False) -> FundQuote:
+    q = FundQuote(code=code, name=alias or code, alias=alias,
+                  benchmark=benchmark, fx=fx)
     try:
         r = requests.get(
             _BASE.format(code=code),
@@ -83,6 +92,9 @@ def fetch_fund(code: str, alias: str = "", dip_alert_pct: float = 1.0) -> FundQu
             if base:
                 q.recent_5d_pct = round((q.nav - base) / base * 100, 2)
         q.trend = [round(float(x["y"]), 4) for x in arr[-15:]]
+        # 完整历史序列（供加仓建议计算 近1周/1月/1年、分位、均线）
+        q.navs = [float(x["y"]) for x in arr]
+        q.dates = [_ts_to_date(int(x["x"])) for x in arr]
 
         if q.change_pct is not None and q.change_pct <= -abs(dip_alert_pct):
             q.dip_alert = True
@@ -101,5 +113,32 @@ def fetch_funds(cfg: dict) -> list[FundQuote]:
         code = str(h.get("code", "")).strip()
         if not code:
             continue
-        out.append(fetch_fund(code, alias=h.get("alias", ""), dip_alert_pct=dip))
+        out.append(fetch_fund(
+            code,
+            alias=h.get("alias", ""),
+            dip_alert_pct=dip,
+            benchmark=h.get("benchmark", ""),
+            fx=bool(h.get("fx", False)),
+        ))
+    return out
+
+
+def fetch_opportunities(cfg: dict) -> list[FundQuote]:
+    """抓取「新机会」互补观察池（与 fetch_funds 同源，复用 fetch_fund）。"""
+    opps = cfg.get("opportunities", []) or []
+    dip = float(cfg.get("dip_alert_pct", 1.0))
+    out: list[FundQuote] = []
+    for h in opps:
+        code = str(h.get("code", "")).strip()
+        if not code:
+            continue
+        q = fetch_fund(
+            code,
+            alias=h.get("alias", ""),
+            dip_alert_pct=dip,
+            benchmark=h.get("benchmark", ""),
+            fx=bool(h.get("fx", False)),
+        )
+        q.reason = h.get("reason", "")
+        out.append(q)
     return out

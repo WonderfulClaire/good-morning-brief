@@ -70,10 +70,31 @@ news:
 funds:
   enabled: true
   # 你的持仓（天天基金代码）
+  #   benchmark：跟踪指数名称（仅用于加仓建议的文案，如“对应纳斯达克100近期…”）
+  #   fx：true 表示 QDII，加仓建议会额外参考 USD/CNY 汇率（best-effort）
   holdings:
     - code: "019172"
       alias: "摩根纳斯达克100人民币A"
+      benchmark: "纳斯达克100"
+      fx: true
     - code: "022436"
       alias: "摩根中证A500ETF联接A"
+      benchmark: "中证A500"
+      fx: false
   # 简单加仓提示：单日跌幅超过该百分比时提示“可关注定投/加仓”
   dip_alert_pct: 1.0
+  # 新机会：与现有持仓互补、可关注配置的基金（不纳入持仓，仅展示+轻量建议）
+  #   reason：一句话互补理由（为什么值得配，跟现有持仓怎么搭）
+  #   benchmark / fx：可选，同 holdings（仅用于分析文案，机会基金可不填）
+  opportunities:
+    - code: "000216"
+      alias: "华安黄金易ETF联接A"
+      benchmark: "黄金/COMEX黄金"
+      reason: "与股债低相关，地缘风险下避险压舱，给组合加一层保险"
+    - code: "007466"
+      alias: "华泰柏瑞中证红利低波ETF联接A"
+      benchmark: "中证红利低波"
+      reason: "高股息+低波动，提供稳定现金流，与科技成长风格互补"
+    - code: "003547"
+      alias: "鹏华丰禄债券"
+      reason: "纯债中低风险，组合稳健底仓，平滑权益波动"

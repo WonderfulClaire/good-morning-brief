@@ -1,0 +1,60 @@
+name: daily-brief
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "运行模式"
+        required: true
+        default: "send"
+        type: choice
+        options:
+          - send
+          - no-send
+  schedule:
+    # UTC 23:00 == 北京时间次日 07:00
+    - cron: "0 23 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run brief
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'send' }}"
+          echo "Mode: ${MODE}"
+          if [ "${MODE}" = "no-send" ]; then
+            python main.py --no-send
+          else
+            python main.py
+          fi
+
+      - name: Upload HTML preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-brief-html
+          path: briefs/*.html
+          if-no-files-found: warn

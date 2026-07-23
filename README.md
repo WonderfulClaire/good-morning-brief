@@ -4,7 +4,7 @@
 
 | 板块 | 内容 | 数据源 |
 |------|------|--------|
-| 📄 论文精选 | 按你的研究方向 + 前沿方向精选 top 3 | arXiv（主）/ Semantic Scholar（兜底） |
+| 📄 论文精选 | 按你的研究方向 + 前沿方向精选 top 3 | arXiv RSS（主）/ OpenAlex / Semantic Scholar（兜底） |
 | 📰 科技新闻 | 当日高热度科技/AI 新闻 | Hacker News 官方 API |
 | 💰 基金涨跌 | 你的持仓当日涨跌 + 定投提示 | 天天基金（东方财富） |
 
@@ -52,7 +52,7 @@
 
 所有设置都在 [`config.yaml`](./config.yaml)：
 
-- **论文方向**：改 `papers.focus_topics`（核心方向）和 `frontier_topics`（前沿方向）
+- **论文方向**：改 `papers.focus_topics`（核心方向）和 `frontier_topics`（前沿方向）；类目在 `paper_categories`
 - **论文篇数**：`papers.pick_top_n`
 - **新闻条数/热度门槛**：`news.top_n` / `news.min_score`
 - **基金持仓**：`funds.holdings`（加减基金代码即可）
@@ -87,7 +87,7 @@ good-morning-brief/
 ├── config.yaml             # 所有可调设置
 ├── requirements.txt
 ├── src/
-│   ├── papers.py           # arXiv + Semantic Scholar
+│   ├── papers.py           # arXiv RSS + OpenAlex + Semantic Scholar
 │   ├── news.py             # Hacker News
 │   ├── funds.py            # 天天基金净值/涨跌
 │   ├── render.py           # HTML 邮件渲染（涨红跌绿）

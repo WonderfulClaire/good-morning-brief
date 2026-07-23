@@ -124,6 +124,30 @@ def _papers_html(papers) -> str:
     return "".join(rows)
 
 
+# --------------------------- 今日速览 ---------------------------
+def _summary_html(papers, news, funds) -> str:
+    pc = len(papers) if papers else 0
+    nc = len(news) if news else 0
+    parts = [
+        f'<span style="margin-right:18px;">📄 <b>{pc}</b> 篇论文精选</span>',
+        f'<span style="margin-right:18px;">📰 <b>{nc}</b> 条科技新闻</span>',
+    ]
+    for f in funds:
+        if f.ok and f.change_pct is not None:
+            txt, color, _ = _fmt_pct(f.change_pct)
+            name = f.alias or f.name or f.code
+            parts.append(
+                f'<span style="margin-right:18px;">💰 {name} <b style="color:{color};">{txt}</b></span>'
+            )
+        else:
+            parts.append(f'<span style="margin-right:18px;">💰 {f.alias or f.code} 数据缺失</span>')
+    return (
+        f'<tr><td style="padding:14px 28px;background:{BG};">'
+        f'<div style="font-size:13.5px;color:{INK};">{"".join(parts)}</div>'
+        f'</td></tr>'
+    )
+
+
 # --------------------------- 组装 ---------------------------
 def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai") -> str:
     now = datetime.now().strftime("%Y-%m-%d %A")
@@ -140,6 +164,8 @@ def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai"
     <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.5px;">☀️ {title}</div>
     <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{now} · 论文 / 科技新闻 / 基金一览</div>
   </td></tr>
+
+  {_summary_html(papers, news, funds)}
 
   {_section_title("论文精选", "📄")}
   {_papers_html(papers)}
@@ -164,7 +190,14 @@ def render_html(title: str, papers, news, funds, tz_label: str = "Asia/Shanghai"
 
 
 def render_text(title: str, papers, news, funds) -> str:
-    lines = [f"☀️ {title}", datetime.now().strftime("%Y-%m-%d"), ""]
+    pc = len(papers) if papers else 0
+    nc = len(news) if news else 0
+    fund_txt = " / ".join(
+        f"{(f.alias or f.code)} {('+%.2f%%' % f.change_pct) if (f.ok and f.change_pct is not None) else '—'}"
+        for f in funds
+    )
+    lines = [f"☀️ {title}", datetime.now().strftime("%Y-%m-%d"),
+             f"📄 {pc} 篇 · 📰 {nc} 条 · 💰 {fund_txt}", ""]
     lines.append("== 论文精选 ==")
     if papers:
         for i, p in enumerate(papers, 1):

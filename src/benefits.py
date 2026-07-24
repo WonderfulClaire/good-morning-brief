@@ -31,14 +31,31 @@ _UA = "good-morning-brief/1.0"
 _IT_HOME = "https://www.ithome.com/rss/"
 _HN = "https://hn.algolia.com/api/v1/search_by_date"
 
-# 大模型 / AI 相关词（命中才视为本板块主题，避免「iPhone 免费修」之类噪声）
+# 大模型 / LLM 专属锚点词（命中才视为本板块主题）。
+# 仅保留「大模型 / 聊天机器人 / 模型 API」相关词，避免手机 OTA、汽车 OTA、AI 卫星等蹭词噪声。
 _AI_KW = [
-    "ai", "大模型", "智能体", "agent", "gpt", "claude", "gemini", "llm", "模型",
-    "深度学习", "神经网络", "开源模型", "文心", "通义", "千问", "kimi", "豆包",
-    "glm", "智谱", "deepseek", "qwen", "mistral", "openai", "anthropic", "谷歌",
-    "百度", "阿里", "字节", "腾讯", "混元", "阶跃", "minimax", "月之暗面", "算力",
-    "推理", "多模态", "chatgpt", "copilot", "perplexity", "grok", "元宝",
-    "ai助手", "ai模型", "foundation model", "chatbot",
+    # 通用大模型概念
+    "大模型", "大语言模型", "语言模型", "llm", "foundation model", "基座模型",
+    "多模态大模型", "推理模型", "对话模型", "聊天机器人", "chatbot", "ai 助手", "ai助手",
+    # 国际厂商 / 模型
+    "gpt", "chatgpt", "openai", "claude", "anthropic", "gemini", "google ai",
+    "llama", "mistral", "perplexity", "grok", "xai", "copilot", "cursor",
+    "free tier", "free api", "open weights", "open-source model",
+    # 国产厂商 / 模型
+    "文心", "通义", "千问", "qwen", "kimi", "豆包", "智谱", "glm", "deepseek",
+    "元宝", "百川", "讯飞星火", "月之暗面", "minimax", "阶跃", "混元", "abab",
+    # 模型发布 / 开源 / 免费额度（即使没有品牌名也算命中）
+    "新模型", "模型发布", "开源模型", "开源权重", "权重开放", "免费额度", "免费 api",
+    "模型 api", "模型开放", "模型开源", "大模型发布",
+]
+
+# 硬件 / 设备类噪声词：命中即剔除（即使带了福利信号），避免手机/汽车/卫星等蹭 AI 的新闻混进来。
+_EXCLUDE_KW = [
+    "手机", "机型", "平板", "笔记本", "电脑", "汽车", "车型", "ota", "卫星", "火箭",
+    "发射", "芯片", "处理器", "显卡", "内存", "固态", "主板", "固件", "系统升级",
+    "推送更新", "耳机", "手表", "电视", "空调", "冰箱", "路由器", "数码", "家电",
+    "机圈", "新机", "发布会", "预热", "真我", "小米", "vivo", "oppo", "荣耀",
+    "iphone", "android", "鸿蒙", "ios",
 ]
 
 # 福利 / 活动信号词，按类型分组（命中即打该类标签）。
@@ -117,6 +134,12 @@ def _ai_hits(text: str) -> int:
     return sum(1 for k in _AI_KW if _has_kw(t, k))
 
 
+def _has_exclude(text: str) -> bool:
+    """命中硬件/设备黑名单（如手机 OTA、汽车 OTA、卫星发射）则视为噪声。"""
+    t = text.lower()
+    return any(k in t for k in _EXCLUDE_KW)
+
+
 def _benefit_hits(text: str):
     """返回 (总命中数, 主要类型标签)。"""
     t = text.lower()
@@ -175,6 +198,8 @@ def _fetch_ithome(limit: int, max_age_days: int) -> list[BenefitItem]:
             continue
         desc = it.findtext("description") or ""
         blob = title + " " + desc
+        if _has_exclude(title):
+            continue
         if _ai_hits(blob) == 0 or _benefit_hits(blob)[0] == 0:
             continue
         age, published = _age_from_pubdate(it.findtext("pubDate") or "")
@@ -211,6 +236,8 @@ def _fetch_hn(limit: int, max_age_days: int, queries) -> list[BenefitItem]:
             title = (h.get("title") or h.get("story_title") or "").strip()
             link = h.get("url") or h.get("story_url") or ""
             if not title or not link:
+                continue
+            if _has_exclude(title):
                 continue
             if _ai_hits(title) == 0 or _benefit_hits(title)[0] == 0:
                 continue

@@ -163,6 +163,28 @@ def _opportunities_html(opportunities) -> str:
     return "".join(rows)
 
 
+# --------------------------- 大模型福利 ---------------------------
+def _benefits_html(benefits) -> str:
+    if not benefits:
+        return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">今日暂无大模型福利/新活动（以官方 App / 公众号公告为准）</td></tr>'
+    rows = []
+    for i, b in enumerate(benefits, 1):
+        chip = (f'<span style="display:inline-block;margin-left:6px;padding:0 7px;border-radius:8px;'
+                f'background:{CHIP};color:{CHIP_TX};font-size:10px;font-weight:600;">{b.benefit_type}</span>')
+        meta = " · ".join(x for x in (b.source, b.published) if x)
+        metaline = f'<div style="font-size:11px;color:{FLAT};margin-top:5px;">{meta}</div>' if meta else ""
+        summary = f'<div style="font-size:12.5px;color:{SUB};line-height:1.6;margin-top:5px;">{b.summary}</div>' if b.summary else ""
+        rows.append(
+            f'<tr><td style="padding:11px 28px;border-bottom:1px solid {LINE};">'
+            f'<div style="font-size:14px;line-height:1.5;">'
+            f'<span style="color:{SUB};font-weight:700;">{i:02d}.</span> '
+            f'<a href="{b.url}" style="color:{INK};text-decoration:none;font-weight:600;">{b.title}</a>{chip}</div>'
+            f'{summary}{metaline}'
+            f'</td></tr>'
+        )
+    return "".join(rows)
+
+
 # --------------------------- 新闻 ---------------------------
 def _news_html(news) -> str:
     if not news:
@@ -223,11 +245,17 @@ def _papers_html(papers) -> str:
 
 
 # --------------------------- 今日速览 ---------------------------
-def _summary_html(papers, news, funds) -> str:
+def _summary_html(papers, benefits, news, funds) -> str:
+    papers = papers or []
+    benefits = benefits or []
+    news = news or []
+    funds = funds or []
     pc = len(papers) if papers else 0
+    bc = len(benefits) if benefits else 0
     nc = len(news) if news else 0
     parts = [
         f'<span style="margin-right:18px;">📄 <b>{pc}</b> 篇论文精选</span>',
+        f'<span style="margin-right:18px;">🎁 <b>{bc}</b> 条大模型福利</span>',
         f'<span style="margin-right:18px;">📰 <b>{nc}</b> 条科技新闻</span>',
     ]
     for f in funds:
@@ -252,7 +280,11 @@ def _summary_html(papers, news, funds) -> str:
 
 
 # --------------------------- 组装 ---------------------------
-def render_html(title: str, papers, news, funds, opportunities=None, tz_label: str = "Asia/Shanghai") -> str:
+def render_html(title: str, papers, benefits=None, news=None, funds=None, opportunities=None, tz_label: str = "Asia/Shanghai") -> str:
+    papers = papers or []
+    benefits = benefits or []
+    news = news or []
+    funds = funds or []
     date_str = _cn_date(tz_label)
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
@@ -265,13 +297,16 @@ def render_html(title: str, papers, news, funds, opportunities=None, tz_label: s
   <!-- header -->
   <tr><td style="background:linear-gradient(135deg,#3b5bdb,#5c7cfa);padding:28px 28px 24px;">
     <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.5px;">☀️ {title}</div>
-    <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{date_str} · 论文 / 科技新闻 / 基金 一览</div>
+    <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{date_str} · 论文 / 大模型福利 / 科技新闻 / 基金 一览</div>
   </td></tr>
 
-  {_summary_html(papers, news, funds)}
+  {_summary_html(papers, benefits, news, funds)}
 
   {_section_title("论文精选", "📄")}
   {_papers_html(papers)}
+
+  {_section_title("大模型福利 · 新活动 / 限时免费 / 新模型", "🎁")}
+  {_benefits_html(benefits)}
 
   {_section_title("科技新闻", "📰")}
   {_news_html(news)}
@@ -285,7 +320,7 @@ def render_html(title: str, papers, news, funds, opportunities=None, tz_label: s
   <!-- footer -->
   <tr><td style="padding:22px 28px;background:{BG};">
     <div style="font-size:11.5px;color:{FLAT};line-height:1.7;">
-      本邮件由 good-morning-brief 自动生成 · 论文来源 arXiv · 新闻来源 IT之家 · 基金来源 天天基金<br>
+      本邮件由 good-morning-brief 自动生成 · 论文来源 arXiv · 大模型福利来源 IT之家 / Hacker News · 新闻来源 IT之家 · 基金来源 天天基金<br>
       基金涨跌颜色遵循 A 股习惯（涨红跌绿）· 净值为 T-1 收盘口径 · 仅供参考，不构成投资建议
     </div>
   </td></tr>
@@ -295,15 +330,20 @@ def render_html(title: str, papers, news, funds, opportunities=None, tz_label: s
 </body></html>"""
 
 
-def render_text(title: str, papers, news, funds, opportunities=None) -> str:
+def render_text(title: str, papers, benefits=None, news=None, funds=None, opportunities=None) -> str:
+    papers = papers or []
+    benefits = benefits or []
+    news = news or []
+    funds = funds or []
     pc = len(papers) if papers else 0
+    bc = len(benefits) if benefits else 0
     nc = len(news) if news else 0
     fund_txt = " / ".join(
         f"{(f.alias or f.code)} {('+%.2f%%' % f.change_pct) if (f.ok and f.change_pct is not None) else '—'}"
         for f in funds
     )
     lines = [f"☀️ {title}", _cn_date(),
-             f"📄 {pc} 篇 · 📰 {nc} 条 · 💰 {fund_txt}", ""]
+             f"📄 {pc} 篇 · 🎁 {bc} 条 · 📰 {nc} 条 · 💰 {fund_txt}", ""]
     lines.append("== 论文精选 ==")
     if papers:
         for i, p in enumerate(papers, 1):
@@ -315,6 +355,18 @@ def render_text(title: str, papers, news, funds, opportunities=None) -> str:
             lines.append(f"   链接：{p.url}")
     else:
         lines.append("(今日无匹配论文)")
+    lines.append("\n== 大模型福利 · 新活动 / 限时免费 / 新模型 ==")
+    if benefits:
+        for i, b in enumerate(benefits, 1):
+            lines.append(f"{i}. [{b.benefit_type}] {b.title}")
+            if b.summary:
+                lines.append(f"   {b.summary}")
+            meta = " · ".join(x for x in [b.source, b.published] if x)
+            if meta:
+                lines.append(f"   （{meta}）")
+            lines.append(f"   链接：{b.url}")
+    else:
+        lines.append("（今日暂无大模型福利/新活动）")
     lines.append("\n== 科技新闻 ==")
     if news:
         for i, n in enumerate(news, 1):

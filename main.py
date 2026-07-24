@@ -21,6 +21,7 @@ from src.news import fetch_news
 from src.funds import fetch_funds, fetch_opportunities
 from src.advice import build_advice, build_opportunity
 from src.render import render_html, render_text
+from src.benefits import fetch_benefits
 from src.mailer import send_email
 
 
@@ -50,6 +51,8 @@ def main() -> None:
 
     papers = fetch_papers(cfg.get("papers", {})) if cfg.get("papers", {}).get("enabled", True) else []
     log.info("论文 %d 篇", len(papers))
+    benefits = fetch_benefits(cfg.get("benefits", {})) if cfg.get("benefits", {}).get("enabled", True) else []
+    log.info("大模型福利 %d 条", len(benefits))
     news = fetch_news(cfg.get("news", {})) if cfg.get("news", {}).get("enabled", True) else []
     log.info("新闻 %d 条", len(news))
     funds = fetch_funds(cfg.get("funds", {})) if cfg.get("funds", {}).get("enabled", True) else []
@@ -71,8 +74,8 @@ def main() -> None:
             log.warning("新机会建议计算失败 %s: %s", o.code, exc)
             o.advice = None
 
-    html = render_html(title, papers, news, funds, opportunities, tz_name)
-    text = render_text(title, papers, news, funds, opportunities)
+    html = render_html(title, papers, benefits, news, funds, opportunities, tz_name)
+    text = render_text(title, papers, benefits, news, funds, opportunities)
 
     out_dir = Path("briefs")
     out_dir.mkdir(exist_ok=True)

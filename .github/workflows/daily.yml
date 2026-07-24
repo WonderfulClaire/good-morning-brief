@@ -43,6 +43,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           SMTP_TO: ${{ secrets.SMTP_TO }}
+          WECHAT_SENDKEY: ${{ secrets.WECHAT_SENDKEY }}
         run: |
           MODE="${{ github.event.inputs.mode || 'send' }}"
           echo "Mode: ${MODE}"

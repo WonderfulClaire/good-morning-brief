@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ------ 颜色 ------
 UP = "#d1434b"       # 涨 红
@@ -28,8 +29,8 @@ CHIP_TX = "#3b5bdb"
 _WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 
-def _cn_date() -> str:
-    d = datetime.now()
+def _cn_date(tz_name: str = "Asia/Shanghai") -> str:
+    d = datetime.now(ZoneInfo(tz_name))
     return f"{d.year}年{d.month}月{d.day}日 {_WEEKDAYS[d.weekday()]}"
 
 
@@ -252,7 +253,7 @@ def _summary_html(papers, news, funds) -> str:
 
 # --------------------------- 组装 ---------------------------
 def render_html(title: str, papers, news, funds, opportunities=None, tz_label: str = "Asia/Shanghai") -> str:
-    date_str = _cn_date()
+    date_str = _cn_date(tz_label)
     return f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"></head>

@@ -23,6 +23,32 @@ from src.advice import build_advice, build_opportunity
 from src.render import render_html, render_text
 from src.benefits import fetch_benefits
 from src.mailer import send_email
+import os
+
+
+def _push_wechat(text: str, date_str: str, sendkey: str, failed: bool = False) -> bool:
+    """通过 Server酱(ServerChan) 把简报摘要推到微信。无 key / 失败均静默跳过，不影响主流程。"""
+    import requests
+    log = logging.getLogger("main")
+    try:
+        title = ("\u26a0\ufe0f 每日简报邮件发送失败（微信兜底）" if failed
+                 else f"\u2600\ufe0f Claire 的每日简报 \u00b7 {date_str} 已送达")
+        resp = requests.post(
+            f"https://sctapi.ftqq.com/{sendkey}.send",
+            data={"title": title, "desp": text},
+            timeout=15,
+        )
+        data = resp.json()
+        if data.get("code") == 0:
+            log.info("微信推送成功")
+            return True
+        log.warning("微信推送返回异常: %s", data)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        log.warning("微信推送失败（不影响邮件）: %s", exc)
+        return False
+
+
 
 
 def setup_logging() -> None:
@@ -89,11 +115,21 @@ def main() -> None:
         return
 
     subject = f"☀️ {title} · {today}"
-    ok = send_email(subject, html, text)
+    ok = False
+    try:
+        ok = send_email(subject, html, text)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("发信异常: %s", exc)
+        ok = False
     log.info("发信状态: %s", "已发送" if ok else "失败")
+
+    # 微信推送（Server酱）：有 key 就推，正常/失败都推，作为双保险 + 兜底提醒
+    sendkey = os.environ.get("WECHAT_SENDKEY", "").strip()
+    if sendkey:
+        _push_wechat(text, today, sendkey, failed=not ok)
+
     if not ok:
         # 发信失败应让 job 以非 0 退出，使 workflow 变红、便于告警，
-        # 避免“脚本跑完=邮件已到”的假成功。
         log.error("邮件发送失败，任务以非 0 状态退出以便告警")
         raise SystemExit(1)
 

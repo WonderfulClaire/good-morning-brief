@@ -60,6 +60,18 @@ papers:
     venue_priority: 0.15
     recency: 0.25
 
+
+# ------------------------- 板块 2.5：大模型福利 / 新活动 -------------------------
+benefits:
+  enabled: true
+  # 每天展示几条（大模型相关的福利/活动：新模型、限时免费、开源、降价延期等）
+  top_n: 5
+  # 只保留最近 N 天内的活动，避免旧闻
+  max_age_days: 14
+  # 数据源（免费、无需密钥）
+  sources:
+    - ithome   # 中文 AI/科技新闻（IT之家 RSS）
+    - hn       # 国际 LLM/免费/新模型（Hacker News Algolia）
 # ------------------------- 板块 2：科技新闻 -------------------------
 news:
   enabled: true

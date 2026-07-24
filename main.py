@@ -11,6 +11,7 @@ import argparse
 import logging
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -45,6 +46,7 @@ def main() -> None:
     cfg = load_config(args.config)
     brief = cfg.get("brief", {})
     title = brief.get("title", "每日简报")
+    tz_name = brief.get("timezone", "Asia/Shanghai")
 
     papers = fetch_papers(cfg.get("papers", {})) if cfg.get("papers", {}).get("enabled", True) else []
     log.info("论文 %d 篇", len(papers))
@@ -69,12 +71,12 @@ def main() -> None:
             log.warning("新机会建议计算失败 %s: %s", o.code, exc)
             o.advice = None
 
-    html = render_html(title, papers, news, funds, opportunities, brief.get("timezone", "Asia/Shanghai"))
+    html = render_html(title, papers, news, funds, opportunities, tz_name)
     text = render_text(title, papers, news, funds, opportunities)
 
     out_dir = Path("briefs")
     out_dir.mkdir(exist_ok=True)
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
     html_path = out_dir / f"{today}.html"
     html_path.write_text(html, encoding="utf-8")
     log.info("HTML 已保存: %s", html_path)
@@ -85,7 +87,12 @@ def main() -> None:
 
     subject = f"☀️ {title} · {today}"
     ok = send_email(subject, html, text)
-    log.info("发信状态: %s", "已发送" if ok else "跳过/失败")
+    log.info("发信状态: %s", "已发送" if ok else "失败")
+    if not ok:
+        # 发信失败应让 job 以非 0 退出，使 workflow 变红、便于告警，
+        # 避免“脚本跑完=邮件已到”的假成功。
+        log.error("邮件发送失败，任务以非 0 状态退出以便告警")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

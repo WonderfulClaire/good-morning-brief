@@ -110,3 +110,12 @@ funds:
     - code: "003547"
       alias: "鹏华丰禄债券"
       reason: "纯债中低风险，组合稳健底仓，平滑权益波动"
+
+# ------------------------- 板块 4：Xmart 每日一讲 -------------------------
+# 上海交大 X-LANCE 实验室「Xmart青年论坛」归档（视频回放 + 讲义 PDF）。
+# 每天从学生论坛 + 前沿讲座合并列表中，按「当年第几天 % 总场次」轮换一场，
+# 数据来自公开仓库 README + GitHub commits API，无需密钥。
+xmart:
+  enabled: true
+  repo: "X-LANCE/Xmart"
+  branch: "main"

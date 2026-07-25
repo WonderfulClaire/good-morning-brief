@@ -163,6 +163,34 @@ def _opportunities_html(opportunities) -> str:
     return "".join(rows)
 
 
+# --------------------------- Xmart 每日一讲 ---------------------------
+def _xmart_html(xmart) -> str:
+    if not xmart:
+        return f'<tr><td style="padding:8px 28px 4px;color:{SUB};font-size:13px;">今日 Xmart 每日一讲获取失败（仓库暂不可达）</td></tr>'
+    issue = f" · {xmart.issue}" if xmart.issue else ""
+    title_link = (f'<a href="{xmart.video_url}" style="color:{INK};text-decoration:none;font-weight:700;">'
+                  f'{xmart.title}</a>')
+    meta = " · ".join(x for x in (xmart.date, xmart.speaker, xmart.duration) if x)
+    slides = (f' ｜ <a href="{xmart.slides_url}" style="color:{ACCENT};text-decoration:none;font-weight:600;">讲义 PDF</a>'
+              ) if xmart.slides_url else ""
+    why = (f'<div style="font-size:12.5px;color:{SUB};line-height:1.6;margin-top:7px;">💡 {xmart.why}</div>'
+           ) if xmart.why else ""
+    updated = (f'<div style="font-size:11px;color:{FLAT};margin-top:5px;">仓库最近更新：{xmart.repo_updated}</div>'
+               if xmart.repo_updated else "")
+    return (
+        f'<tr><td style="padding:14px 28px;border-bottom:1px solid {LINE};">'
+        f'<div style="font-size:15px;line-height:1.5;">🎓 {xmart.kind}{issue}</div>'
+        f'<div style="font-size:14.5px;line-height:1.5;margin-top:6px;">{title_link}</div>'
+        f'<div style="font-size:12px;color:{SUB};margin-top:4px;">{meta}</div>'
+        f'{why}'
+        f'<div style="font-size:12.5px;margin-top:8px;">'
+        f'<a href="{xmart.video_url}" style="color:{ACCENT};text-decoration:none;font-weight:600;">▶ 看回放</a>{slides}'
+        f'</div>'
+        f'{updated}'
+        f'</td></tr>'
+    )
+
+
 # --------------------------- 大模型福利 ---------------------------
 def _benefits_html(benefits) -> str:
     if not benefits:
@@ -280,7 +308,7 @@ def _summary_html(papers, benefits, news, funds) -> str:
 
 
 # --------------------------- 组装 ---------------------------
-def render_html(title: str, papers, benefits=None, news=None, funds=None, opportunities=None, tz_label: str = "Asia/Shanghai") -> str:
+def render_html(title: str, papers, benefits=None, news=None, funds=None, opportunities=None, xmart=None, tz_label: str = "Asia/Shanghai") -> str:
     papers = papers or []
     benefits = benefits or []
     news = news or []
@@ -297,7 +325,7 @@ def render_html(title: str, papers, benefits=None, news=None, funds=None, opport
   <!-- header -->
   <tr><td style="background:linear-gradient(135deg,#3b5bdb,#5c7cfa);padding:28px 28px 24px;">
     <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:.5px;">☀️ {title}</div>
-    <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{date_str} · 论文 / 大模型福利 / 科技新闻 / 基金 一览</div>
+    <div style="font-size:13px;color:#dbe4ff;margin-top:6px;">{date_str} · 论文 / 大模型福利 / 科技新闻 / 基金 / Xmart 一览</div>
   </td></tr>
 
   {_summary_html(papers, benefits, news, funds)}
@@ -317,10 +345,13 @@ def render_html(title: str, papers, benefits=None, news=None, funds=None, opport
   {_section_title("新机会 · 可关注配置", "✨")}
   {_opportunities_html(opportunities)}
 
+  {_section_title("Xmart 每日一讲 · 青年论坛回放", "🎓")}
+  {_xmart_html(xmart)}
+
   <!-- footer -->
   <tr><td style="padding:22px 28px;background:{BG};">
     <div style="font-size:11.5px;color:{FLAT};line-height:1.7;">
-      本邮件由 good-morning-brief 自动生成 · 论文来源 arXiv · 大模型福利来源 IT之家 / Hacker News · 新闻来源 IT之家 · 基金来源 天天基金<br>
+      本邮件由 good-morning-brief 自动生成 · 论文来源 arXiv · 大模型福利来源 IT之家 / Hacker News · 新闻来源 IT之家 · 基金来源 天天基金 · Xmart 来源 X-LANCE/Xmart（上海交大 X-LANCE 实验室）<br>
       基金涨跌颜色遵循 A 股习惯（涨红跌绿）· 净值为 T-1 收盘口径 · 仅供参考，不构成投资建议
     </div>
   </td></tr>
@@ -330,7 +361,7 @@ def render_html(title: str, papers, benefits=None, news=None, funds=None, opport
 </body></html>"""
 
 
-def render_text(title: str, papers, benefits=None, news=None, funds=None, opportunities=None) -> str:
+def render_text(title: str, papers, benefits=None, news=None, funds=None, opportunities=None, xmart=None) -> str:
     papers = papers or []
     benefits = benefits or []
     news = news or []
@@ -403,5 +434,22 @@ def render_text(title: str, papers, benefits=None, news=None, funds=None, opport
                 lines.append(f"   {adv.text}")
         else:
             lines.append(f"- {o.alias or o.code} 获取失败: {o.error}")
+    lines.append("\n== Xmart 每日一讲 · 青年论坛回放 ==")
+    if xmart:
+        issue = f" · {xmart.issue}" if xmart.issue else ""
+        lines.append(f"🎓 {xmart.kind}{issue}：{xmart.title}")
+        meta = " · ".join(x for x in (xmart.date, xmart.speaker, xmart.duration) if x)
+        if meta:
+            lines.append(f"   {meta}")
+        if xmart.why:
+            lines.append(f"   💡 {xmart.why}")
+        if xmart.video_url:
+            lines.append(f"   回放：{xmart.video_url}")
+        if xmart.slides_url:
+            lines.append(f"   讲义：{xmart.slides_url}")
+        if xmart.repo_updated:
+            lines.append(f"   仓库最近更新：{xmart.repo_updated}")
+    else:
+        lines.append("（今日 Xmart 获取失败，仓库暂不可达）")
     lines.append("\n-- good-morning-brief 自动生成，仅供参考，不构成投资建议 --")
     return "\n".join(lines)

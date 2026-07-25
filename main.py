@@ -22,6 +22,7 @@ from src.funds import fetch_funds, fetch_opportunities
 from src.advice import build_advice, build_opportunity
 from src.render import render_html, render_text
 from src.benefits import fetch_benefits
+from src.xmart import fetch_xmart
 from src.mailer import send_email
 import os
 
@@ -100,8 +101,12 @@ def main() -> None:
             log.warning("新机会建议计算失败 %s: %s", o.code, exc)
             o.advice = None
 
-    html = render_html(title, papers, benefits, news, funds, opportunities, tz_name)
-    text = render_text(title, papers, benefits, news, funds, opportunities)
+    # Xmart 每日一讲：上海交大 X-LANCE 青年论坛归档，每天轮换一场
+    xmart = fetch_xmart(cfg.get("xmart", {}))
+    log.info("Xmart 每日一讲: %s", xmart.title if xmart else "无")
+
+    html = render_html(title, papers, benefits, news, funds, opportunities, xmart, tz_name)
+    text = render_text(title, papers, benefits, news, funds, opportunities, xmart)
 
     out_dir = Path("briefs")
     out_dir.mkdir(exist_ok=True)

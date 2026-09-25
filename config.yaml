@@ -1,121 +1,16 @@
-# ---------------------------------------------------------------------------
-# good-morning-brief 个人每日简报配置
-# 三个板块：论文 / 科技新闻 / 基金涨跌，每天一封邮件送到你的信箱。
-# ---------------------------------------------------------------------------
-
 brief:
-  title: "Claire 的每日简报"
-  language: zh-CN
+  title: "Claire 的每日大厂技术报告"
   timezone: "Asia/Shanghai"
+  recipient: "wk1924321@163.com"
+reports:
+  catalog: "reports.json"
+  state_path: "delivery-state.json"
+  profile_updated: "2026-09-25"
+  # Public learning topics only; private interview and research details stay local.
+  focus:
+    - "GRPO/PPO：优势、重要性采样、训练监控与奖励投机"
+    - "DPO 与 on-policy distillation：数据、目标与参数更新"
+    - "长上下文、注意力、KV cache、MoE 与训练通信"
+    - "Agent 合成数据、可执行验证与评测"
+    - "多模态架构、语音生成、音色与韵律"
 
-# ------------------------- 板块 1：论文 -------------------------
-papers:
-  enabled: true
-  # 每天精选几篇
-  pick_top_n: 3
-  # 检索时间窗（天）与每源抓取上限
-  days_back: 14
-  max_results_per_source: 40
-  # arXiv RSS 订阅类目（最稳的取数方式，几乎不限流）。
-  # 核心类目（语音/音频/信号）默认即视为相关；其余类目仅保留命中关键词的。
-  paper_categories:
-    - cs.SD
-    - eess.AS
-    - eess.SP
-    - cs.AI
-    - cs.CL
-    - cs.LG
-  core_categories:
-    - cs.SD
-    - eess.AS
-    - eess.SP
-  # 你关注的核心方向（命中即高分）
-  focus_topics:
-    - multi-channel speech enhancement
-    - microphone-array speech enhancement
-    - neural beamforming
-    - MVDR beamforming
-    - speech separation
-    - target speaker extraction
-  # 你也想跟的前沿方向（加分项，跟进就业/趋势）
-  frontier_topics:
-    - large language model agent
-    - retrieval augmented generation
-    - efficient LLM inference
-    - multimodal foundation model
-    - reinforcement learning
-    - embodied AI
-  # 高优先级会议/期刊（命中加分）
-  venues_high_priority:
-    - ICASSP
-    - Interspeech
-    - IEEE TASLP
-    - NeurIPS
-    - ICML
-    - ICLR
-    - ACL
-  ranking_weights:
-    keyword_match: 0.40
-    frontier_bonus: 0.20
-    venue_priority: 0.15
-    recency: 0.25
-
-
-# ------------------------- 板块 2.5：大模型福利 / 新活动 -------------------------
-benefits:
-  enabled: true
-  # 每天展示几条（大模型相关的福利/活动：新模型、限时免费、开源、降价延期等）
-  top_n: 5
-  # 只保留最近 N 天内的活动，避免旧闻
-  max_age_days: 14
-  # 数据源（免费、无需密钥）
-  sources:
-    - ithome   # 中文 AI/科技新闻（IT之家 RSS）
-    - hn       # 国际 LLM/免费/新模型（Hacker News Algolia）
-# ------------------------- 板块 2：科技新闻 -------------------------
-news:
-  enabled: true
-  # 每天展示几条（中文科技新闻，主源 IT之家 RSS，兜底 V2EX 热帖）
-  top_n: 6
-
-# ------------------------- 板块 3：基金 -------------------------
-funds:
-  enabled: true
-  # 你的持仓（天天基金代码）
-  #   benchmark：跟踪指数名称（仅用于加仓建议的文案，如“对应纳斯达克100近期…”）
-  #   fx：true 表示 QDII，加仓建议会额外参考 USD/CNY 汇率（best-effort）
-  holdings:
-    - code: "019172"
-      alias: "摩根纳斯达克100人民币A"
-      benchmark: "纳斯达克100"
-      fx: true
-    - code: "022436"
-      alias: "摩根中证A500ETF联接A"
-      benchmark: "中证A500"
-      fx: false
-  # 简单加仓提示：单日跌幅超过该百分比时提示“可关注定投/加仓”
-  dip_alert_pct: 1.0
-  # 新机会：与现有持仓互补、可关注配置的基金（不纳入持仓，仅展示+轻量建议）
-  #   reason：一句话互补理由（为什么值得配，跟现有持仓怎么搭）
-  #   benchmark / fx：可选，同 holdings（仅用于分析文案，机会基金可不填）
-  opportunities:
-    - code: "000216"
-      alias: "华安黄金易ETF联接A"
-      benchmark: "黄金/COMEX黄金"
-      reason: "与股债低相关，地缘风险下避险压舱，给组合加一层保险"
-    - code: "007466"
-      alias: "华泰柏瑞中证红利低波ETF联接A"
-      benchmark: "中证红利低波"
-      reason: "高股息+低波动，提供稳定现金流，与科技成长风格互补"
-    - code: "003547"
-      alias: "鹏华丰禄债券"
-      reason: "纯债中低风险，组合稳健底仓，平滑权益波动"
-
-# ------------------------- 板块 4：Xmart 每日一讲 -------------------------
-# 上海交大 X-LANCE 实验室「Xmart青年论坛」归档（视频回放 + 讲义 PDF）。
-# 每天从学生论坛 + 前沿讲座合并列表中，按「当年第几天 % 总场次」轮换一场，
-# 数据来自公开仓库 README + GitHub commits API，无需密钥。
-xmart:
-  enabled: true
-  repo: "X-LANCE/Xmart"
-  branch: "main"

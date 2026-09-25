@@ -1,143 +1,130 @@
-"""good-morning-brief 主编排。
-
-用法：
-    python main.py            # 抓取三板块，保存 HTML，并按环境变量发信
-    python main.py --preview  # 仅抓取并保存 HTML 预览，不发信（本地调试用）
-    python main.py --no-send  # 抓取并保存，但不发信
-"""
+"""Daily source-checked technical-report reading guide; no paid API."""
 from __future__ import annotations
-
 import argparse
+from datetime import date, datetime
+from html import escape
+import json
 import logging
-from datetime import datetime
+import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
 from dotenv import load_dotenv
-
+import requests
 from src.config import load_config
-from src.papers import fetch_papers
-from src.news import fetch_news
-from src.funds import fetch_funds, fetch_opportunities
-from src.advice import build_advice, build_opportunity
-from src.render import render_html, render_text
-from src.benefits import fetch_benefits
-from src.xmart import fetch_xmart
 from src.mailer import send_email
-import os
 
+LOG = logging.getLogger("technical-report")
 
-def _push_wechat(text: str, date_str: str, sendkey: str, failed: bool = False) -> bool:
-    """通过 Server酱(ServerChan) 把简报摘要推到微信。无 key / 失败均静默跳过，不影响主流程。"""
-    import requests
-    log = logging.getLogger("main")
-    try:
-        title = ("\u26a0\ufe0f 每日简报邮件发送失败（微信兜底）" if failed
-                 else f"\u2600\ufe0f Claire 的每日简报 \u00b7 {date_str} 已送达")
-        resp = requests.post(
-            f"https://sctapi.ftqq.com/{sendkey}.send",
-            data={"title": title, "desp": text},
-            timeout=15,
-        )
-        data = resp.json()
-        if data.get("code") == 0:
-            log.info("微信推送成功")
-            return True
-        log.warning("微信推送返回异常: %s", data)
-        return False
-    except Exception as exc:  # noqa: BLE001
-        log.warning("微信推送失败（不影响邮件）: %s", exc)
-        return False
+def load_catalog(path):
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    required = {"id", "title", "organization", "published", "url", "priority",
+                "why", "mechanism", "sections", "questions", "exercise", "checked"}
+    ids = set()
+    for report in data:
+        if not required <= report.keys() or report["id"] in ids:
+            raise ValueError("Incomplete or duplicate report")
+        ids.add(report["id"])
+        date.fromisoformat(report["published"])
+        date.fromisoformat(report["checked"])
+        if not report["url"].startswith("https://arxiv.org/html/"):
+            raise ValueError("Report must link to reviewed primary-source full text")
+        for field in ("why", "mechanism", "sections", "questions", "exercise"):
+            if not report[field]:
+                raise ValueError(f"Missing {field}")
+    if not data:
+        raise ValueError("Empty report catalog")
+    return data
 
+def select_report(reports, history, today):
+    eligible = [r for r in reports if r["published"] <= today]
+    unseen = [r for r in eligible if r["id"] not in history.get("reports", {})]
+    if unseen:
+        return max(unseen, key=lambda r: (r["priority"], r["published"], r["id"])), False
+    if not eligible:
+        raise ValueError("No eligible reports")
+    return min(eligible, key=lambda r: (history["reports"][r["id"]], -r["priority"])), True
 
+def render(report, today, cfg, review=False):
+    title = cfg["brief"]["title"]
+    kind = "间隔复习" if review else "今日精读"
+    blocks = [
+        ("为什么现在读", [report["why"]]),
+        ("关键机制", report["mechanism"]),
+        ("建议阅读章节（约 25–40 分钟）", report["sections"]),
+        ("对应面试问题", report["questions"]),
+        ("读完做一个小练习", [report["exercise"]]),
+    ]
+    intro = f'{report["organization"]} · 发布 {report["published"]} · 导读核验 {report["checked"]}'
+    text = f'{title} · {today}\n{kind}：{report["title"]}\n{intro}\n原文：{report["url"]}\n'
+    body = f'<p style="color:#546577">{escape(today)} · {kind}</p><h1>{escape(report["title"])}</h1><p>{escape(intro)}</p>'
+    body += f'<p><a href="{escape(report["url"], quote=True)}">打开官方报告原文 →</a></p>'
+    for heading, paragraphs in blocks:
+        text += "\n" + heading + "\n" + "\n".join(f"{i+1}. {p}" for i, p in enumerate(paragraphs)) + "\n"
+        body += f'<h2 style="font-size:19px;margin-top:28px">{escape(heading)}</h2><ol>'
+        body += "".join(f"<li style='margin:10px 0'>{escape(p)}</li>" for p in paragraphs) + "</ol>"
+    note = "导读与练习是学习建议；实验结论以原文设置为准。已推送不等于已读或已掌握。"
+    if review:
+        note += " 本轮已核验报告均已推送，今天复习较早的一篇；补入新报告后优先发送未推送的导读。"
+    age = (date.fromisoformat(today) - date.fromisoformat(cfg["reports"]["profile_updated"])).days
+    if age > 14:
+        note += f" 选题方向距上次更新已有 {age} 天，仍沿用已核验阅读池。"
+    text += "\n" + note
+    html = ('<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f'<title>{escape(title)}</title><body style="margin:0;background:#f4f6f8;color:#172b3a;font:16px/1.8 Arial,sans-serif">'
+            '<main style="max-width:740px;margin:24px auto;padding:28px;background:white;border-radius:12px">'
+            f'<p style="color:#14746f;font-weight:bold">{escape(title)}</p>{body}'
+            f'<hr><p style="font-size:13px;color:#667">{escape(note)}</p></main></body></html>')
+    return html, text
 
+def verify_source(report):
+    response = requests.get(report["url"], timeout=30, headers={"User-Agent": "TechnicalReportReadingGuide/1.0"})
+    response.raise_for_status()
+    if report["id"] not in response.url or report["title"].casefold() not in response.text.casefold():
+        raise ValueError("Primary source identity check failed")
 
-def setup_logging() -> None:
-    logging.basicConfig(level=logging.INFO,
-                        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-
-
-def parse_args() -> argparse.Namespace:
-    ap = argparse.ArgumentParser(description="每日简报：论文/科技新闻/基金")
-    ap.add_argument("--preview", action="store_true", help="只生成 HTML 预览，不发信")
-    ap.add_argument("--no-send", action="store_true", help="生成并保存，但不发信")
-    ap.add_argument("--config", default="config.yaml")
-    return ap.parse_args()
-
-
-def main() -> None:
-    setup_logging()
-    log = logging.getLogger("main")
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     load_dotenv()
-    args = parse_args()
-
+    parser = argparse.ArgumentParser(description="每日大厂技术报告精读")
+    parser.add_argument("--preview", action="store_true")
+    parser.add_argument("--no-send", action="store_true")
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--date", help="Preview date YYYY-MM-DD; never used for sending")
+    args = parser.parse_args()
+    preview = args.preview or args.no_send
+    if args.date and not preview:
+        parser.error("--date requires --preview or --no-send")
     cfg = load_config(args.config)
-    brief = cfg.get("brief", {})
-    title = brief.get("title", "每日简报")
-    tz_name = brief.get("timezone", "Asia/Shanghai")
-
-    papers = fetch_papers(cfg.get("papers", {})) if cfg.get("papers", {}).get("enabled", True) else []
-    log.info("论文 %d 篇", len(papers))
-    benefits = fetch_benefits(cfg.get("benefits", {})) if cfg.get("benefits", {}).get("enabled", True) else []
-    log.info("大模型福利 %d 条", len(benefits))
-    news = fetch_news(cfg.get("news", {})) if cfg.get("news", {}).get("enabled", True) else []
-    log.info("新闻 %d 条", len(news))
-    funds = fetch_funds(cfg.get("funds", {})) if cfg.get("funds", {}).get("enabled", True) else []
-    log.info("基金 %d 只", len(funds))
-    # 为每只基金计算加仓建议（数据驱动，best-effort）
-    for f in funds:
-        try:
-            f.advice = build_advice(f)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("加仓建议计算失败 %s: %s", f.code, exc)
-            f.advice = None
-    # 新机会：互补观察池（数据驱动，best-effort）
-    opportunities = fetch_opportunities(cfg.get("funds", {})) if cfg.get("funds", {}).get("enabled", True) else []
-    log.info("新机会 %d 只", len(opportunities))
-    for o in opportunities:
-        try:
-            o.advice = build_opportunity(o, getattr(o, "reason", ""))
-        except Exception as exc:  # noqa: BLE001
-            log.warning("新机会建议计算失败 %s: %s", o.code, exc)
-            o.advice = None
-
-    # Xmart 每日一讲：上海交大 X-LANCE 青年论坛归档，每天轮换一场
-    xmart = fetch_xmart(cfg.get("xmart", {}))
-    log.info("Xmart 每日一讲: %s", xmart.title if xmart else "无")
-
-    html = render_html(title, papers, benefits, news, funds, opportunities, xmart, tz_name)
-    text = render_text(title, papers, benefits, news, funds, opportunities, xmart)
-
-    out_dir = Path("briefs")
-    out_dir.mkdir(exist_ok=True)
-    today = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d")
-    html_path = out_dir / f"{today}.html"
-    html_path.write_text(html, encoding="utf-8")
-    log.info("HTML 已保存: %s", html_path)
-
-    if args.preview or args.no_send:
-        log.info("跳过发信（%s）", "preview" if args.preview else "no-send")
+    today = args.date or datetime.now(ZoneInfo(cfg["brief"]["timezone"])).date().isoformat()
+    date.fromisoformat(today)
+    state_path = Path(cfg["reports"].get("state_path", "delivery-state.json"))
+    state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"dates": {}, "reports": {}}
+    if not preview and today in state["dates"]:
+        LOG.info("Already sent for %s; skipping duplicate", today)
         return
-
-    subject = f"☀️ {title} · {today}"
-    ok = False
-    try:
-        ok = send_email(subject, html, text)
-    except Exception as exc:  # noqa: BLE001
-        log.exception("发信异常: %s", exc)
-        ok = False
-    log.info("发信状态: %s", "已发送" if ok else "失败")
-
-    # 微信推送（Server酱）：有 key 就推，正常/失败都推，作为双保险 + 兜底提醒
-    sendkey = os.environ.get("WECHAT_SENDKEY", "").strip()
-    if sendkey:
-        _push_wechat(text, today, sendkey, failed=not ok)
-
-    if not ok:
-        # 发信失败应让 job 以非 0 退出，使 workflow 变红、便于告警，
-        log.error("邮件发送失败，任务以非 0 状态退出以便告警")
-        raise SystemExit(1)
-
+    report, review = select_report(load_catalog(cfg["reports"]["catalog"]), state, today)
+    verify_source(report)
+    html, text = render(report, today, cfg, review)
+    out = Path("briefs")
+    out.mkdir(exist_ok=True)
+    (out / f"{today}.html").write_text(html, encoding="utf-8")
+    (out / f"{today}.txt").write_text(text, encoding="utf-8")
+    LOG.info("Selected %s: %s (review=%s)", report["id"], report["title"], review)
+    if preview:
+        LOG.info("Preview only; no mail and no delivery state changed")
+        return
+    os.environ["SMTP_TO"] = cfg["brief"]["recipient"]
+    subject = f'{cfg["brief"]["title"]} · {today} · {report["title"]}'
+    if not send_email(subject, html, text):
+        raise SystemExit("SMTP delivery failed; state not advanced")
+    state["dates"][today] = report["id"]
+    state["reports"][report["id"]] = today
+    temporary = state_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(state_path)
+    LOG.info("SMTP accepted message; delivery state saved (inbox receipt is not observable)")
 
 if __name__ == "__main__":
     main()
+

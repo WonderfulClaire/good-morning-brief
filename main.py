@@ -44,7 +44,8 @@ def validate_source_metadata(report):
 def load_catalog(path):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     required = {"id", "title", "organization", "published", "url", "priority",
-                "why", "mechanism", "sections", "questions", "exercise", "checked"}
+                "why", "mechanism", "sections", "questions", "exercise", "checked",
+                "lesson", "answers", "exercise_answer", "lesson_checked"}
     ids = set()
     for report in data:
         if not required <= report.keys() or report["id"] in ids:
@@ -52,6 +53,21 @@ def load_catalog(path):
         ids.add(report["id"])
         date.fromisoformat(report["published"])
         date.fromisoformat(report["checked"])
+        date.fromisoformat(report["lesson_checked"])
+        if not isinstance(report["lesson"], list) or not report["lesson"]:
+            raise ValueError("A self-contained lesson is required")
+        for section in report["lesson"]:
+            if (not isinstance(section, dict)
+                    or not isinstance(section.get("heading"), str) or not section["heading"].strip()
+                    or not isinstance(section.get("paragraphs"), list) or not section["paragraphs"]
+                    or any(not isinstance(p, str) or not p.strip() for p in section["paragraphs"])):
+                raise ValueError("Incomplete lesson section")
+        if (not isinstance(report["answers"], list)
+                or len(report["answers"]) != len(report["questions"])
+                or any(not isinstance(a, str) or not a.strip() for a in report["answers"])
+                or not isinstance(report["exercise_answer"], str)
+                or not report["exercise_answer"].strip()):
+            raise ValueError("Questions and exercise need complete reference answers")
         validate_source_metadata(report)
         for field in ("why", "mechanism", "sections", "questions", "exercise"):
             if not report[field]:
@@ -72,22 +88,27 @@ def select_report(reports, history, today):
 def render(report, today, cfg, review=False):
     title = cfg["brief"]["title"]
     kind = "间隔复习" if review else "今日精读"
-    blocks = [
-        ("为什么现在读", [report["why"]]),
-        ("关键机制", report["mechanism"]),
-        ("建议阅读章节（约 25–40 分钟）", report["sections"]),
-        ("对应面试问题", report["questions"]),
-        ("读完做一个小练习", [report["exercise"]]),
+    blocks = [("为什么现在学", [report["why"]])]
+    blocks += [(s["heading"], s["paragraphs"]) for s in report["lesson"]]
+    blocks += [
+        ("对应面试问题：先自己回答", [f'{i+1}. {q}' for i, q in enumerate(report["questions"])]),
+        ("面试问题参考答案", [f'{i+1}. {a}' for i, a in enumerate(report["answers"])]),
+        ("动手练习", [report["exercise"]]),
+        ("练习参考解答", [report["exercise_answer"]]),
+        ("继续读原文（选读）", report["sections"]),
     ]
-    intro = f'{report["organization"]} · 发布 {report["published"]} · 导读核验 {report["checked"]}'
+    intro = f'{report["organization"]} · 发布 {report["published"]} · 讲解核验 {report["lesson_checked"]}'
     text = f'{title} · {today}\n{kind}：{report["title"]}\n{intro}\n原文：{report["url"]}\n'
     body = f'<p style="color:#546577">{escape(today)} · {kind}</p><h1>{escape(report["title"])}</h1><p>{escape(intro)}</p>'
-    body += f'<p><a href="{escape(report["url"], quote=True)}">打开官方报告原文 →</a></p>'
+    lead = "今天的核心内容已在邮件里展开。先跟着例子理解，再尝试回答；原文留作进一步核对与延伸。"
+    text += "\n" + lead + "\n"
+    body += f'<p style="padding:16px;background:#edf6f4;border-left:4px solid #14746f">{escape(lead)}</p>'
     for heading, paragraphs in blocks:
-        text += "\n" + heading + "\n" + "\n".join(f"{i+1}. {p}" for i, p in enumerate(paragraphs)) + "\n"
-        body += f'<h2 style="font-size:19px;margin-top:28px">{escape(heading)}</h2><ol>'
-        body += "".join(f"<li style='margin:10px 0'>{escape(p)}</li>" for p in paragraphs) + "</ol>"
-    note = "导读与练习是学习建议；实验结论以原文设置为准。已推送不等于已读或已掌握。"
+        text += "\n" + heading + "\n" + "\n\n".join(paragraphs) + "\n"
+        body += f'<h2 style="font-size:21px;line-height:1.5;margin:32px 0 14px;color:#125e59">{escape(heading)}</h2>'
+        body += "".join(f'<p style="margin:14px 0">{escape(p)}</p>' for p in paragraphs)
+    body += f'<p><a href="{escape(report["url"], quote=True)}">阅读原文与实验设置 →</a></p>'
+    note = "机制讲解、推导与教学算例为自行编写；具体报告结论对应上方原文章节，教学数字不冒充实验结果。已推送不等于已掌握。"
     if review:
         note += " 本轮已核验报告均已推送，今天复习较早的一篇；补入新报告后优先发送未推送的导读。"
     age = (date.fromisoformat(today) - date.fromisoformat(cfg["reports"]["profile_updated"])).days
@@ -96,8 +117,8 @@ def render(report, today, cfg, review=False):
     text += "\n" + note
     html = ('<!doctype html><html lang="zh-CN"><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            f'<title>{escape(title)}</title><body style="margin:0;background:#f4f6f8;color:#172b3a;font:16px/1.8 Arial,sans-serif">'
-            '<main style="max-width:740px;margin:24px auto;padding:28px;background:white;border-radius:12px">'
+            f'<title>{escape(title)}</title><body style="margin:0;background:#f4f6f8;color:#172b3a;font:17px/1.9 Arial,Microsoft YaHei,sans-serif;overflow-wrap:anywhere">'
+            '<main style="max-width:700px;margin:16px auto;padding:20px;background:white;border-radius:12px">'
             f'<p style="color:#14746f;font-weight:bold">{escape(title)}</p>{body}'
             f'<hr><p style="font-size:13px;color:#667">{escape(note)}</p></main></body></html>')
     return html, text

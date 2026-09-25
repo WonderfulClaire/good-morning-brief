@@ -63,6 +63,39 @@ class ReportsTests(unittest.TestCase):
         self.assertIn('&lt;script&gt;', html)
         self.assertIn('对应面试问题', text)
 
+    def test_lessons_and_answers_are_in_both_email_parts(self):
+        for report in CATALOG:
+            html, text = main.render(report, '2026-09-26', CFG)
+            for section in report['lesson']:
+                self.assertIn(section['heading'], text)
+                for paragraph in section['paragraphs']:
+                    self.assertIn(paragraph, text)
+                    self.assertIn(main.escape(paragraph), html)
+            for answer in report['answers'] + [report['exercise_answer']]:
+                self.assertIn(answer, text)
+                self.assertIn(main.escape(answer), html)
+            self.assertLess(html.index('为什么现在学'), html.index('继续读原文'))
+            self.assertLess(len(html.encode('utf-8')), 90000)
+
+    def test_lesson_content_is_escaped(self):
+        report = copy.deepcopy(CATALOG[0])
+        report['lesson'][0]['paragraphs'][0] = '<script>alert(1)</script>'
+        html, text = main.render(report, '2026-09-26', CFG)
+        self.assertNotIn('<script>', html)
+        self.assertIn('&lt;script&gt;', html)
+        self.assertIn('<script>', text)
+
+    def test_catalog_rejects_incomplete_lesson_or_answers(self):
+        for field, value in [('lesson', []), ('lesson', [{'heading': 'x', 'paragraphs': ['']}]),
+                             ('answers', []), ('exercise_answer', '')]:
+            data = copy.deepcopy(CATALOG)
+            data[0][field] = value
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'reports.json'
+                path.write_text(json.dumps(data), encoding='utf-8')
+                with self.assertRaises(ValueError):
+                    main.load_catalog(path)
+
     def run_isolated(self, args, result, initial=None):
         with tempfile.TemporaryDirectory() as directory:
             cfg = copy.deepcopy(CFG)

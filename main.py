@@ -133,6 +133,11 @@ def main():
     if args.date and not preview:
         parser.error("--date requires --preview or --no-send")
     cfg = load_config(args.config)
+    # Retired queued runs must not send later, even on a different calendar day.
+    run_id = os.getenv("GITHUB_RUN_ID")
+    blocked_runs = {str(value) for value in cfg.get("delivery", {}).get("blocked_run_ids", [])}
+    if not preview and run_id and run_id in blocked_runs:
+        raise SystemExit("Retired workflow run: sending is blocked; use the verified replacement run")
     today = args.date or datetime.now(ZoneInfo(cfg["brief"]["timezone"])).date().isoformat()
     date.fromisoformat(today)
     state_path = Path(cfg["reports"].get("state_path", "delivery-state.json"))

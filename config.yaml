@@ -2,6 +2,11 @@ brief:
   title: "Claire 的每日研究精读"
   timezone: "Asia/Shanghai"
   recipient: "wk1924321@163.com"
+delivery:
+  # GitHub left this dispatch queued without jobs and rejected cancellation.
+  # Checkout uses main, so this guard also protects against a delayed start.
+  blocked_run_ids:
+    - "36087080961"
 reports:
   catalog: "reports.json"
   state_path: "delivery-state.json"

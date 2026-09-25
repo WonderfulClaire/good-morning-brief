@@ -88,6 +88,11 @@ class ReportsTests(unittest.TestCase):
         calls, state = self.run_isolated(['--preview'], True)
         self.assertEqual((calls,state), (0,None))
 
+    def test_retired_run_never_sends(self):
+        with patch.dict(os.environ, {'GITHUB_RUN_ID': '36087080961'}):
+            calls, state = self.run_isolated([], False)
+        self.assertEqual((calls, state), (0, None))
+
     def test_failed_send_does_not_advance(self):
         calls, state = self.run_isolated([], False)
         self.assertEqual((calls,state), (1,None))

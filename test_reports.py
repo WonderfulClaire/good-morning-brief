@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import main
 from src.config import load_config
 
@@ -13,6 +13,25 @@ CATALOG = main.load_catalog(ROOT / 'reports.json')
 CFG = load_config(ROOT / 'config.yaml')
 
 class ReportsTests(unittest.TestCase):
+    def test_official_html_with_markup_and_entities(self):
+        report = dict(CATALOG[0], id='official-guide', url='https://www.anthropic.com/research/example', title='Agents & evaluation')
+        response = Mock(url=report['url'], text='<h1>Agents &amp; <em>evaluation</em></h1>')
+        with patch('main.requests.get', return_value=response):
+            main.verify_source(report)
+            response.url = 'https://www.anthropic.com.example.net/fake'
+            with self.assertRaises(ValueError):
+                main.verify_source(report)
+
+    def test_pdf_must_match_reviewed_bytes(self):
+        content = b'%PDF-1.7 reviewed fixture'
+        report = dict(CATALOG[0], source_format='pdf', pdf_sha256=main.hashlib.sha256(content).hexdigest())
+        response = Mock(url=report['url'], content=content)
+        with patch('main.requests.get', return_value=response):
+            main.verify_source(report)
+            response.content += b'changed'
+            with self.assertRaises(ValueError):
+                main.verify_source(report)
+
     def test_relevance_before_recency_and_newer_tiebreak(self):
         r = copy.deepcopy(CATALOG[0])
         old = dict(r, id='old', priority=120, published='2020-01-01')

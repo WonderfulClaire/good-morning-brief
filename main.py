@@ -3,10 +3,14 @@ from __future__ import annotations
 import argparse
 from datetime import date, datetime
 from html import escape
+from html.parser import HTMLParser
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
+import re
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import requests
@@ -14,6 +18,28 @@ from src.config import load_config
 from src.mailer import send_email
 
 LOG = logging.getLogger("technical-report")
+
+class SourceText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_data(self, data):
+        self.parts.append(data)
+
+def normalized(text):
+    return " ".join(text.split()).casefold()
+
+def validate_source_metadata(report):
+    # The catalog is editorially reviewed; HTTPS alone does not prove provenance.
+    parsed = urlparse(report["url"])
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("A reviewed HTTPS primary-source URL is required")
+    form = report.get("source_format", "html")
+    if form not in ("html", "pdf"):
+        raise ValueError("Unsupported source format")
+    if form == "pdf" and not re.fullmatch(r"[0-9a-f]{64}", report.get("pdf_sha256", "")):
+        raise ValueError("PDF requires the SHA-256 of the reviewed original")
 
 def load_catalog(path):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -26,8 +52,7 @@ def load_catalog(path):
         ids.add(report["id"])
         date.fromisoformat(report["published"])
         date.fromisoformat(report["checked"])
-        if not report["url"].startswith("https://arxiv.org/html/"):
-            raise ValueError("Report must link to reviewed primary-source full text")
+        validate_source_metadata(report)
         for field in ("why", "mechanism", "sections", "questions", "exercise"):
             if not report[field]:
                 raise ValueError(f"Missing {field}")
@@ -78,9 +103,21 @@ def render(report, today, cfg, review=False):
     return html, text
 
 def verify_source(report):
+    validate_source_metadata(report)
     response = requests.get(report["url"], timeout=30, headers={"User-Agent": "TechnicalReportReadingGuide/1.0"})
     response.raise_for_status()
-    if report["id"] not in response.url or report["title"].casefold() not in response.text.casefold():
+    allowed = {urlparse(report["url"]).hostname, *report.get("redirect_hosts", [])}
+    resolved = urlparse(response.url)
+    if resolved.scheme != "https" or resolved.hostname not in allowed:
+        raise ValueError("Unreviewed primary-source redirect")
+    if report.get("source_format", "html") == "pdf":
+        if not response.content.startswith(b"%PDF-") or hashlib.sha256(response.content).hexdigest() != report["pdf_sha256"]:
+            raise ValueError("Reviewed PDF changed; review before sending")
+        return
+    parser = SourceText()
+    parser.feed(response.text)
+    title = normalized(report.get("source_title", report["title"]))
+    if not title or title not in normalized(" ".join(parser.parts)):
         raise ValueError("Primary source identity check failed")
 
 def main():
